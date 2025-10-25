@@ -1,0 +1,16 @@
+services:
+  acessai_frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: modulo_checkin
+    restart: unless-stopped
+    ports:
+      - '8081:80'
+    networks:
+      - agendadigital_rede-interna
+
+# 1. NOVO: Seção que declara a rede como EXTERNA
+networks:
+  agendadigital_rede-interna:
+    external: true

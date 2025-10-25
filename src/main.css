@@ -1,0 +1,22 @@
+html.global-high-contrast {
+  background-color: black !important;
+}
+
+/* O resto do main.css (body, #app) deve estar como antes */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100vh;
+  overflow-x: hidden;
+  transition: background-color 0.3s ease;
+}
+
+#app {
+  width: 100%;
+  min-height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}

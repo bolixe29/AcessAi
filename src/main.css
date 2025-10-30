@@ -1,22 +1,29 @@
-html.global-high-contrast {
-  background-color: black !important;
-}
+/* src/main.css - Versão Final com Fonte Corrigida */
 
-/* O resto do main.css (body, #app) deve estar como antes */
 html,
 body {
   margin: 0;
   padding: 0;
   width: 100%;
-  height: 100vh;
+  min-height: 100vh;
+  /* background-color: #f0f2f5; <<< LINHA REMOVIDA PARA CORRIGIR O CONTRASTE */
   overflow-x: hidden;
-  transition: background-color 0.3s ease;
+  transition: background-color 0.3s ease; /* Transição suave */
+
+  /* <<< CORREÇÃO DA FONTE: Define a fonte padrão para o app inteiro */
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Regra que muda o fundo do documento inteiro no modo contraste */
+html.global-high-contrast {
+  background-color: black !important;
 }
 
 #app {
   width: 100%;
   min-height: 100%;
   display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  justify-content: center; /* Centraliza horizontalmente */
+  align-items: flex-start; /* Alinha o conteúdo principal ao topo */
+  transition: background-color 0.3s ease; /* Transição para o #app também */
 }

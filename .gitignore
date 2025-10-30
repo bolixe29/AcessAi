@@ -28,3 +28,6 @@ coverage
 *.sw?
 
 *.tsbuildinfo
+
+# Ignorar todos os arquivos de backup
+*.bak

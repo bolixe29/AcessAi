@@ -1,21 +1,10 @@
-// src/main.js
-
-import { createApp, watch } from 'vue' // <<< ADICIONAMOS 'watch'
+import { createApp } from 'vue'
 import App from './App.vue'
+import router from './router' // <<< IMPORTE O ROTEADOR
 import './main.css'
 
 const app = createApp(App)
-app.mount('#app')
 
-// LÓGICA DE CLASSE GLOBAL (O Novo Superpoder)
-const root = document.documentElement // Pega a tag <html>
-watch(
-  () => app.config.globalProperties.altoContraste,
-  (isHighContrast) => {
-    if (isHighContrast) {
-      root.classList.add('global-high-contrast')
-    } else {
-      root.classList.remove('global-high-contrast')
-    }
-  },
-)
+app.use(router) // <<< DIGA AO VUE PARA USAR O ROTEADOR
+
+app.mount('#app')

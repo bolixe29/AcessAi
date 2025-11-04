@@ -1,5 +1,6 @@
 <script setup>
-import { ref, watch, computed } from 'vue'
+//import { ref, watch, computed } from 'vue'
+import { ref } from 'vue'
 import api from '../services/api.js'
 
 // Variáveis de estado existentes
@@ -9,10 +10,10 @@ const usuario = ref(null)
 const consultas = ref([])
 const message = ref('')
 
-// --- VARIÁVEIS DO MODAL E SENHA ATUALIZADAS ---
+// --- VARIÁVEIS DO MODAL E SENHA ---
 const isModalVisivel = ref(false)
-const consultaParaCheckin = ref(null) // Guarda a consulta que o usuário clicou
-const ultimaSenhaGerada = ref(null) // Guarda apenas a última senha gerada
+const consultaParaCheckin = ref(null)
+const ultimaSenhaGerada = ref(null)
 
 // Função de máscara (sem alteração)
 function formatarCPF(event) {
@@ -29,7 +30,7 @@ function formatarCPF(event) {
   event.target.value = valor
 }
 
-// Função de busca (sem alteração)
+// Função de busca (com a correção do status)
 async function buscarConsultas() {
   if (!cpf.value) {
     message.value = 'Por favor, digite seu CPF.'
@@ -52,23 +53,22 @@ async function buscarConsultas() {
     }
     consultas.value = agendamentosDeHoje.map((consulta) => ({
       id: consulta.id,
-      procedimento: consulta.procedimento || consulta.especialidade.nome,
+      procedimento: consulta.especialidade.nome,
       horario: formatarHorario(consulta.horario),
-      status: null,
+      status: consulta.status, // Lendo o status real do banco
     }))
     etapa.value = 'confirmacao'
     message.value = ''
-    ultimaSenhaGerada.value = null // Limpa a senha da busca anterior
+    ultimaSenhaGerada.value = null
   } catch (error) {
     message.value = 'Erro ao processar seus dados. Procure a recepção.'
     console.error('Erro na busca:', error)
   }
 }
 
-// --- LÓGICA DO CHECK-IN (Sem alteração) ---
-
+// Lógica do Check-in (sem alteração)
 function abrirModalCheckin(consulta) {
-  if (consulta.status === 'confirmado' || consulta.status === 'confirmando') return
+  if (consulta.status !== 'AGENDADO') return
   consultaParaCheckin.value = consulta
   isModalVisivel.value = true
 }
@@ -84,11 +84,11 @@ async function executarCheckin(tipoAtendimento) {
     const response = await api.post(`/agendamentos/${consulta.id}/checkin`, {
       tipo: tipoAtendimento,
     })
-    const senha = response.data.status
+    const senhaGerada = response.data.status
     consultas.value = consultas.value.map((c) =>
-      c.id === consulta.id ? { ...c, status: 'confirmado' } : c,
+      c.id === consulta.id ? { ...c, status: senhaGerada } : c,
     )
-    ultimaSenhaGerada.value = senha
+    ultimaSenhaGerada.value = senhaGerada
   } catch (error) {
     consultas.value = consultas.value.map((c) =>
       c.id === consulta.id ? { ...c, status: 'erro' } : c,
@@ -109,6 +109,16 @@ function formatarHorario(horarioString) {
   }
   return `${partes[0]}:${partes[1]}`
 }
+
+// --- NOVA FUNÇÃO PARA LIMPAR O TOTEM ---
+function resetarTotem() {
+  etapa.value = 'identificacao'
+  cpf.value = ''
+  usuario.value = null
+  consultas.value = []
+  message.value = ''
+  ultimaSenhaGerada.value = null
+}
 </script>
 
 <template>
@@ -123,7 +133,7 @@ function formatarHorario(horarioString) {
       </template>
     </header>
 
-    <!-- Conteúdo Principal (Sem alteração) -->
+    <!-- Conteúdo Principal (Formulário) (Sem alteração) -->
     <div v-if="etapa === 'identificacao'" class="main-content">
       <form @submit.prevent="buscarConsultas">
         <div class="input-group">
@@ -142,12 +152,12 @@ function formatarHorario(horarioString) {
       </form>
     </div>
 
-    <!-- Tabela e Senha (Sem alteração) -->
+    <!-- Tabela e Senha (Botão SAIR adicionado) -->
     <div v-else-if="etapa === 'confirmacao'" class="main-content">
       <table class="consultas-table">
         <thead>
           <tr>
-            <th>Procedimento</th>
+            <th>Especialidade</th>
             <th>Horário</th>
             <th>Ação</th>
           </tr>
@@ -157,61 +167,55 @@ function formatarHorario(horarioString) {
             <td>{{ consulta.procedimento }}</td>
             <td>{{ consulta.horario }}</td>
             <td>
-              <button
-                @click="abrirModalCheckin(consulta)"
-                :disabled="consulta.status === 'confirmado' || consulta.status === 'confirmando'"
-                :class="{ 'btn-success': consulta.status === 'confirmado' }"
-              >
-                <span v-if="!consulta.status">Confirmar Chegada</span>
+              <div v-if="consulta.status !== 'AGENDADO'" class="status-confirmado">
                 <span v-if="consulta.status === 'confirmando'">Processando...</span>
-                <span v-if="consulta.status === 'confirmado'">Confirmado ✓</span>
-                <span v-if="consulta.status === 'erro'">Erro! Tente Novamente</span>
+                <span v-else-if="consulta.status === 'erro'">Erro!</span>
+                <span v-else>Confirmado ✓</span>
+              </div>
+              <button v-else @click="abrirModalCheckin(consulta)" class="btn-confirmar-chegada">
+                <span>Confirmar Chegada</span>
               </button>
             </td>
           </tr>
         </tbody>
       </table>
 
+      <!-- Div da senha (agora só mostra a última senha gerada) -->
       <div v-if="ultimaSenhaGerada" class="senha-display-global">
         SENHA DE ATENDIMENTO: <strong>{{ ultimaSenhaGerada }}</strong>
+      </div>
+
+      <!-- NOVO BOTÃO DE SAIR/LIMPAR -->
+      <div class="botao-sair-container">
+        <button @click="resetarTotem" class="btn-secondary full-width">SAIR (NOVA CONSULTA)</button>
       </div>
     </div>
   </div>
 
-  <!-- 
-    ===================================================
-    MUDANÇA NO MODAL
-    ===================================================
-  -->
+  <!-- MODAL DE AUTODECLARAÇÃO (Sem alteração) -->
   <div v-if="isModalVisivel" class="modal-overlay">
     <div class="modal-content">
       <h2>ATENDIMENTO PREFERENCIAL?</h2>
       <p>Selecione uma opção para gerar sua senha de atendimento.</p>
-
       <div class="modal-botoes">
-        <!-- CORREÇÃO 1: Botão Preferencial agora usa <img> -->
         <button
           class="btn-preferencial"
           @click="executarCheckin('PREFERENCIAL')"
           aria-label="Sim, sou preferencial"
         >
-          <!-- O caminho /iconPrefSIM.ico funciona porque está na pasta /public/ -->
           <img src="/iconPrefSIM.ico" alt="Atendimento Preferencial" class="btn-icon" />
         </button>
-
-        <!-- Botão Padrão (Sem alteração) -->
         <button class="btn-padrao" @click="executarCheckin('PADRAO')">
           <strong>NÃO SOU PREFERENCIAL</strong>
         </button>
       </div>
-
       <button class="btn-cancelar" @click="isModalVisivel = false">Cancelar</button>
     </div>
   </div>
 </template>
 
 <style scoped>
-/* Estilos 1, 2, 3, 4 (Container, Texto, Formulário, Tabela) - Sem alteração */
+/* Estilos 1, 2, 3 (Container, Texto, Formulário) - Sem alteração */
 .checkin-container {
   display: flex;
   flex-direction: column;
@@ -329,9 +333,21 @@ button:active {
   background-color: #00549f;
   color: #ffffff;
 }
+
+/* NOVO: Estilo para o botão Secundário (Sair) */
+.btn-secondary {
+  background-color: #6c757d; /* Um cinza neutro */
+  color: #ffffff;
+}
+.btn-secondary:hover {
+  background-color: #5a6268;
+}
+
 .full-width {
   width: 100%;
 }
+
+/* 4. ESTILOS DA TABELA (Nova Classe .status-confirmado) */
 .consultas-table {
   border-collapse: collapse;
   margin-top: 1em;
@@ -346,24 +362,37 @@ button:active {
   padding: 1em;
   text-align: left;
   border-bottom: 1px solid #e0e0e0;
+  vertical-align: middle;
 }
 .consultas-table th {
   background-color: #f7f7f7;
   font-weight: bold;
   color: #333333;
 }
-.consultas-table td button {
+.btn-confirmar-chegada {
   width: 100%;
   padding: 0.8em;
   font-size: 1em;
   background-color: #00549f;
   color: white;
 }
-.consultas-table td button.btn-success {
-  background-color: #28a745;
+.status-confirmado {
+  font-size: 1.1em;
+  font-weight: bold;
+  color: #28a745;
+  text-align: center;
+  padding: 0.8em;
+}
+.status-confirmado span {
+  color: inherit;
 }
 
-/* 5. ESTILOS DE ALTO CONTRASTE (Senha Global e Modal) */
+/* NOVO: Container do botão de Sair */
+.botao-sair-container {
+  margin-top: 2em;
+}
+
+/* 5. ESTILOS DE ALTO CONTRASTE (Corrigido para .status-confirmado e .btn-secondary) */
 .senha-display-global {
   font-size: 2em;
   font-weight: bold;
@@ -411,6 +440,12 @@ button:active {
   color: black !important;
   border: 2px solid white !important;
 }
+/* NOVO: Estilo do botão Sair no contraste */
+.high-contrast button.btn-secondary {
+  background-color: #333 !important; /* Cinza escuro */
+  color: white !important;
+  border: 2px solid white !important;
+}
 .high-contrast .consultas-table {
   background-color: black !important;
   border: 1px solid white !important;
@@ -425,15 +460,14 @@ button:active {
   color: yellow !important;
   border-bottom-color: white !important;
 }
-.high-contrast .consultas-table td button {
+.high-contrast .consultas-table td button.btn-confirmar-chegada {
   background-color: yellow !important;
   color: black !important;
   border: 2px solid white !important;
 }
-.high-contrast .btn-success {
-  background-color: white !important;
-  color: black !important;
-  border-color: yellow !important;
+.high-contrast .status-confirmado span,
+.high-contrast .status-confirmado {
+  color: white !important;
 }
 .high-contrast .senha-display-global {
   background-color: #111;
@@ -444,10 +478,7 @@ button:active {
   color: white;
 }
 
-/* ===================================================
-  CORREÇÕES NO ESTILO DO MODAL
-  ===================================================
-*/
+/* MODAL E SEUS ESTILOS (Sem alteração) */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -486,44 +517,31 @@ button:active {
   gap: 1.5em;
   margin-bottom: 2em;
 }
-
-/* CORREÇÃO 2: Ajuste no estilo base do botão do modal */
 .modal-botoes button {
   width: 200px;
   height: 150px;
-  font-size: 1.5em; /* Removido, pois o btn-preferencial não tem texto */
   font-weight: bold;
   border-radius: 1em;
   display: flex;
-  /* flex-direction: column; <- Removido */
-  justify-content: center; /* Centraliza o conteúdo (ícone ou texto) */
+  justify-content: center;
   align-items: center;
-  padding: 10px; /* Adicionado padding */
-  box-sizing: border-box; /* Garante que o padding não estoure o tamanho */
+  padding: 10px;
+  box-sizing: border-box;
 }
-
-/* CORREÇÃO 3: Removida a classe .icones que usava emojis */
-/* .modal-botoes button .icones { ... } */
-
-/* CORREÇÃO 4: Nova cor e estilo para o botão preferencial */
 .btn-preferencial {
-  background-color: #294887; /* <<< SUA NOVA COR */
+  background-color: #294887;
   color: white;
 }
-
-/* NOVO: Estilo para o ícone dentro do botão preferencial */
 .btn-preferencial .btn-icon {
   width: 128px;
   height: 128px;
-  object-fit: contain; /* Garante que a imagem caiba perfeitamente */
+  object-fit: contain;
 }
-
 .btn-padrao {
   background-color: #28a745;
   color: white;
-  flex-direction: column; /* Botão padrão ainda usa texto, então mantém a coluna */
+  flex-direction: column;
 }
-
 .btn-cancelar {
   width: auto;
   padding: 0.8em 1.5em;
@@ -534,8 +552,6 @@ button:active {
   border: none;
   text-decoration: underline;
 }
-
-/* Modal no Alto Contraste (Sem alteração) */
 .high-contrast .modal-content {
   background-color: black !important;
   border: 2px solid white;
@@ -549,12 +565,6 @@ button:active {
   background-color: yellow !important;
   color: black !important;
   border: 2px solid white;
-}
-/* CORREÇÃO 5: Garantir que o ícone fique visível no modo contraste (se for SVG/PNG) */
-.high-contrast .btn-preferencial .btn-icon {
-  /* Se o seu ícone for colorido, ele pode sumir. Filtros CSS podem ajudar */
-  /* filter: invert(1) brightness(2); */
-  /* Por enquanto, deixamos como está, pois o fundo do botão já é amarelo */
 }
 .high-contrast .btn-cancelar {
   color: yellow !important;
